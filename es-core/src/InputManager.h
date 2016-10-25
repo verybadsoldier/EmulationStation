@@ -21,7 +21,7 @@ private:
 
 	void loadDefaultKBConfig();
 
-	std::map<SDL_JoystickID, SDL_Joystick*> mJoysticks;
+	std::map<SDL_JoystickID, SDL_GameController*> mJoysticks;
 	std::map<SDL_JoystickID, InputConfig*> mInputConfigs;
 	InputConfig* mKeyboardInputConfig;
 

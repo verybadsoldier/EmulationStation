@@ -289,15 +289,15 @@ int main(int argc, char* argv[])
 			switch(event.type)
 			{
 				case SDL_JOYHATMOTION:
-				case SDL_JOYBUTTONDOWN:
-				case SDL_JOYBUTTONUP:
+				case SDL_CONTROLLERBUTTONDOWN:
+				case SDL_CONTROLLERBUTTONUP:
 				case SDL_KEYDOWN:
 				case SDL_KEYUP:
-				case SDL_JOYAXISMOTION:
+				case SDL_CONTROLLERAXISMOTION:
 				case SDL_TEXTINPUT:
 				case SDL_TEXTEDITING:
-				case SDL_JOYDEVICEADDED:
-				case SDL_JOYDEVICEREMOVED:
+				case SDL_CONTROLLERDEVICEADDED:
+				case SDL_CONTROLLERDEVICEREMOVED:
 					InputManager::getInstance()->parseEvent(event, &window);
 					break;
 				case SDL_QUIT:

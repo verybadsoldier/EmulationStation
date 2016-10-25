@@ -48,7 +48,7 @@ void InputManager::init()
 
 	SDL_SetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS, 
 		Settings::getInstance()->getBool("BackgroundJoystickInput") ? "1" : "0");
-	SDL_InitSubSystem(SDL_INIT_JOYSTICK);
+	SDL_InitSubSystem(SDL_INIT_GAMECONTROLLER);
 	SDL_JoystickEventState(SDL_ENABLE);
 
 	// first, open all currently present joysticks
@@ -67,23 +67,25 @@ void InputManager::addJoystickByDeviceIndex(int id)
 	assert(id >= 0 && id < SDL_NumJoysticks());
 	
 	// open joystick & add to our list
-	SDL_Joystick* joy = SDL_JoystickOpen(id);
+	SDL_GameController* gctrl = SDL_GameControllerOpen(id);
+	assert(gctrl);
+	SDL_Joystick* joy = SDL_GameControllerGetJoystick(gctrl);
 	assert(joy);
 
 	// add it to our list so we can close it again later
 	SDL_JoystickID joyId = SDL_JoystickInstanceID(joy);
-	mJoysticks[joyId] = joy;
+	mJoysticks[joyId] = gctrl;
 
 	char guid[65];
 	SDL_JoystickGetGUIDString(SDL_JoystickGetGUID(joy), guid, 65);
 
 	// create the InputConfig
-	mInputConfigs[joyId] = new InputConfig(joyId, SDL_JoystickName(joy), guid);
+	mInputConfigs[joyId] = new InputConfig(joyId, SDL_GameControllerName(gctrl), guid);
 	if(!loadInputConfig(mInputConfigs[joyId]))
 	{
-		LOG(LogInfo) << "Added unconfigured joystick " << SDL_JoystickName(joy) << " (GUID: " << guid << ", instance ID: " << joyId << ", device index: " << id << ").";
+		LOG(LogInfo) << "Added unconfigured joystick " << SDL_GameControllerName(gctrl) << " (GUID: " << guid << ", instance ID: " << joyId << ", device index: " << id << ").";
 	}else{
-		LOG(LogInfo) << "Added known joystick " << SDL_JoystickName(joy) << " (instance ID: " << joyId << ", device index: " << id << ")";
+		LOG(LogInfo) << "Added known joystick " << SDL_GameControllerName(gctrl) << " (instance ID: " << joyId << ", device index: " << id << ")";
 	}
 
 	// set up the prevAxisValues
@@ -110,7 +112,7 @@ void InputManager::removeJoystickByJoystickID(SDL_JoystickID joyId)
 	auto joyIt = mJoysticks.find(joyId);
 	if(joyIt != mJoysticks.end())
 	{
-		SDL_JoystickClose(joyIt->second);
+		SDL_GameControllerClose(joyIt->second);
 		mJoysticks.erase(joyIt);
 	}else{
 		LOG(LogError) << "Could not find joystick to close (instance ID: " << joyId << ")";
@@ -124,7 +126,7 @@ void InputManager::deinit()
 
 	for(auto iter = mJoysticks.begin(); iter != mJoysticks.end(); iter++)
 	{
-		SDL_JoystickClose(iter->second);
+		SDL_GameControllerClose(iter->second);
 	}
 	mJoysticks.clear();
 
@@ -147,7 +149,7 @@ void InputManager::deinit()
 	}
 
 	SDL_JoystickEventState(SDL_DISABLE);
-	SDL_QuitSubSystem(SDL_INIT_JOYSTICK);
+	SDL_QuitSubSystem(SDL_INIT_GAMECONTROLLER);
 }
 
 int InputManager::getNumJoysticks() { return mJoysticks.size(); }
@@ -156,7 +158,7 @@ int InputManager::getButtonCountByDevice(SDL_JoystickID id)
 	if(id == DEVICE_KEYBOARD)
 		return 120; //it's a lot, okay.
 	else
-		return SDL_JoystickNumButtons(mJoysticks[id]);
+		return SDL_JoystickNumButtons(SDL_GameControllerGetJoystick(mJoysticks[id]));
 }
 
 InputConfig* InputManager::getInputConfigByDevice(int device)
@@ -172,29 +174,29 @@ bool InputManager::parseEvent(const SDL_Event& ev, Window* window)
 	bool causedEvent = false;
 	switch(ev.type)
 	{
-	case SDL_JOYAXISMOTION:
+	case SDL_CONTROLLERAXISMOTION:
 		//if it switched boundaries
-		if((abs(ev.jaxis.value) > DEADZONE) != (abs(mPrevAxisValues[ev.jaxis.which][ev.jaxis.axis]) > DEADZONE))
+		if((abs(ev.caxis.value) > DEADZONE) != (abs(mPrevAxisValues[ev.caxis.which][ev.caxis.axis]) > DEADZONE))
 		{
 			int normValue;
-			if(abs(ev.jaxis.value) <= DEADZONE)
+			if(abs(ev.caxis.value) <= DEADZONE)
 				normValue = 0;
 			else
-				if(ev.jaxis.value > 0)
+				if(ev.caxis.value > 0)
 					normValue = 1;
 				else
 					normValue = -1;
 
-			window->input(getInputConfigByDevice(ev.jaxis.which), Input(ev.jaxis.which, TYPE_AXIS, ev.jaxis.axis, normValue, false));
+			window->input(getInputConfigByDevice(ev.caxis.which), Input(ev.caxis.which, TYPE_AXIS, ev.caxis.axis, normValue, false));
 			causedEvent = true;
 		}
 
 		mPrevAxisValues[ev.jaxis.which][ev.jaxis.axis] = ev.jaxis.value;
 		return causedEvent;
 
-	case SDL_JOYBUTTONDOWN:
-	case SDL_JOYBUTTONUP:
-		window->input(getInputConfigByDevice(ev.jbutton.which), Input(ev.jbutton.which, TYPE_BUTTON, ev.jbutton.button, ev.jbutton.state == SDL_PRESSED, false));
+	case SDL_CONTROLLERBUTTONDOWN:
+	case SDL_CONTROLLERBUTTONUP:
+		window->input(getInputConfigByDevice(ev.cbutton.which), Input(ev.cbutton.which, TYPE_BUTTON, ev.cbutton.button, ev.cbutton.state == SDL_PRESSED, false));
 		return true;
 
 	case SDL_JOYHATMOTION:
@@ -229,12 +231,12 @@ bool InputManager::parseEvent(const SDL_Event& ev, Window* window)
 		window->textInput(ev.text.text);
 		break;
 
-	case SDL_JOYDEVICEADDED:
-		addJoystickByDeviceIndex(ev.jdevice.which); // ev.jdevice.which is a device index
+	case SDL_CONTROLLERDEVICEADDED:
+		addJoystickByDeviceIndex(ev.cdevice.which); // ev.jdevice.which is a device index
 		return true;
 
-	case SDL_JOYDEVICEREMOVED:
-		removeJoystickByJoystickID(ev.jdevice.which); // ev.jdevice.which is an SDL_JoystickID (instance ID)
+	case SDL_CONTROLLERDEVICEREMOVED:
+		removeJoystickByJoystickID(ev.cdevice.which); // ev.jdevice.which is an SDL_JoystickID (instance ID)
 		return false;
 	}
 
@@ -443,6 +445,6 @@ std::string InputManager::getDeviceGUIDString(int deviceId)
 	}
 
 	char guid[65];
-	SDL_JoystickGetGUIDString(SDL_JoystickGetGUID(it->second), guid, 65);
+	SDL_JoystickGetGUIDString(SDL_JoystickGetGUID(SDL_GameControllerGetJoystick(it->second)), guid, 65);
 	return std::string(guid);
 }
