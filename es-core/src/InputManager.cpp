@@ -62,34 +62,31 @@ void InputManager::init()
 	loadInputConfig(mKeyboardInputConfig);
 }
 
+
 void InputManager::addJoystickByDeviceIndex(int id)
 {
 	assert(id >= 0 && id < SDL_NumJoysticks());
 	
-	// open joystick & add to our list
-	SDL_GameController* gctrl = SDL_GameControllerOpen(id);
-	assert(gctrl);
-	SDL_Joystick* joy = SDL_GameControllerGetJoystick(gctrl);
-	assert(joy);
+	AbstractJoystick j(i);
 
 	// add it to our list so we can close it again later
 	SDL_JoystickID joyId = SDL_JoystickInstanceID(joy);
-	mJoysticks[joyId] = gctrl;
+	mJoysticks[joyId] = j;
 
 	char guid[65];
 	SDL_JoystickGetGUIDString(SDL_JoystickGetGUID(joy), guid, 65);
 
 	// create the InputConfig
-	mInputConfigs[joyId] = new InputConfig(joyId, SDL_GameControllerName(gctrl), guid);
+	mInputConfigs[joyId] = new InputConfig(joyId, j.getName(), guid);
 	if(!loadInputConfig(mInputConfigs[joyId]))
 	{
-		LOG(LogInfo) << "Added unconfigured joystick " << SDL_GameControllerName(gctrl) << " (GUID: " << guid << ", instance ID: " << joyId << ", device index: " << id << ").";
+		LOG(LogInfo) << "Added unconfigured joystick " << j.getName() << " (GUID: " << guid << ", instance ID: " << joyId << ", device index: " << id << ").";
 	}else{
-		LOG(LogInfo) << "Added known joystick " << SDL_GameControllerName(gctrl) << " (instance ID: " << joyId << ", device index: " << id << ")";
+		LOG(LogInfo) << "Added known joystick " << j.getName() << " (instance ID: " << joyId << ", device index: " << id << ")";
 	}
 
 	// set up the prevAxisValues
-	int numAxes = SDL_JoystickNumAxes(joy);
+	int numAxes = SDL_JoystickNumAxes(j.getJoystick());
 	mPrevAxisValues[joyId] = new int[numAxes];
 	std::fill(mPrevAxisValues[joyId], mPrevAxisValues[joyId] + numAxes, 0); //initialize array to 0
 }
@@ -112,7 +109,7 @@ void InputManager::removeJoystickByJoystickID(SDL_JoystickID joyId)
 	auto joyIt = mJoysticks.find(joyId);
 	if(joyIt != mJoysticks.end())
 	{
-		SDL_GameControllerClose(joyIt->second);
+		joyIt->second.close();
 		mJoysticks.erase(joyIt);
 	}else{
 		LOG(LogError) << "Could not find joystick to close (instance ID: " << joyId << ")";
@@ -126,7 +123,7 @@ void InputManager::deinit()
 
 	for(auto iter = mJoysticks.begin(); iter != mJoysticks.end(); iter++)
 	{
-		SDL_GameControllerClose(iter->second);
+		iter->second.close();
 	}
 	mJoysticks.clear();
 
@@ -158,7 +155,7 @@ int InputManager::getButtonCountByDevice(SDL_JoystickID id)
 	if(id == DEVICE_KEYBOARD)
 		return 120; //it's a lot, okay.
 	else
-		return SDL_JoystickNumButtons(SDL_GameControllerGetJoystick(mJoysticks[id]));
+		return SDL_JoystickNumButtons(SDL_GameControllerGetJoystick(mJoysticks[id].getJoystick()));
 }
 
 InputConfig* InputManager::getInputConfigByDevice(int device)
@@ -445,6 +442,6 @@ std::string InputManager::getDeviceGUIDString(int deviceId)
 	}
 
 	char guid[65];
-	SDL_JoystickGetGUIDString(SDL_JoystickGetGUID(SDL_GameControllerGetJoystick(it->second)), guid, 65);
+	SDL_JoystickGetGUIDString(SDL_JoystickGetGUID(it->second.getJoystick()), guid, 65);
 	return std::string(guid);
 }
