@@ -5,6 +5,7 @@
 #include <vector>
 #include <map>
 #include <string>
+#include <set>
 
 class InputConfig;
 class Window;
@@ -23,15 +24,21 @@ private:
 
 	std::map<SDL_JoystickID, SDL_Joystick*> mJoysticks;
 	std::map<SDL_JoystickID, InputConfig*> mInputConfigs;
+	std::map<SDL_JoystickID, std::set<int>> mTriggerAxis; // set of axis IDs which are triggers actually
 	InputConfig* mKeyboardInputConfig;
 
 	std::map<SDL_JoystickID, int*> mPrevAxisValues;
 
 	bool initialized() const;
 
+	Sint16 mapTriggerRange(const SDL_JoyAxisEvent& jaxis);
+	void detectTriggerAxis(int id);
+	std::string triggerAxisToString(const std::set<int>& triggerAxis);
+
 	void addJoystickByDeviceIndex(int id);
 	void removeJoystickByJoystickID(SDL_JoystickID id);
 	bool loadInputConfig(InputConfig* config); // returns true if successfully loaded, false if not (or didn't exist)
+	void loadAdditionalGameControllerDb();
 
 public:
 	virtual ~InputManager();
@@ -42,6 +49,7 @@ public:
 	void doOnFinish();
 	static std::string getConfigPath();
 	static std::string getTemporaryConfigPath();
+	static std::string getGameControllerDbPath();
 
 	void init();
 	void deinit();

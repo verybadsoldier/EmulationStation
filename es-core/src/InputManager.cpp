@@ -48,8 +48,10 @@ void InputManager::init()
 
 	SDL_SetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS, 
 		Settings::getInstance()->getBool("BackgroundJoystickInput") ? "1" : "0");
-	SDL_InitSubSystem(SDL_INIT_JOYSTICK);
+	SDL_InitSubSystem(SDL_INIT_GAMECONTROLLER);
 	SDL_JoystickEventState(SDL_ENABLE);
+
+	loadAdditionalGameControllerDb();
 
 	// first, open all currently present joysticks
 	int numJoysticks = SDL_NumJoysticks();
@@ -62,10 +64,51 @@ void InputManager::init()
 	loadInputConfig(mKeyboardInputConfig);
 }
 
+void InputManager::loadAdditionalGameControllerDb()
+{
+	const std::string& path = getGameControllerDbPath();
+	int res = SDL_GameControllerAddMappingsFromFile(path.c_str());
+	if (res == -1)
+		LOG(LogInfo) << "No additional game controller mapping file found at: '" << path << "'";
+	else
+		LOG(LogInfo) << "Loaded " << res << " game controller mappings from file : '" << path << "'";
+}
+
+void InputManager::detectTriggerAxis(int id)
+{
+	// check if device is supported by gamecontroller API
+	if (!SDL_IsGameController(id))
+	{
+		LOG(LogInfo) << "Controller #" << id << " does NOT support SDL gamecontroller API";
+		return;
+	}
+
+	SDL_GameController* gctrl = SDL_GameControllerOpen(id);
+	assert(gctrl);
+
+	SDL_Joystick* joy = SDL_GameControllerGetJoystick(gctrl);
+	SDL_JoystickID joyId = SDL_JoystickInstanceID(joy);
+
+	// list all trigger axis we want to detect
+	std::set<SDL_GameControllerAxis> triggerAxis = {
+			SDL_CONTROLLER_AXIS_TRIGGERLEFT,
+			SDL_CONTROLLER_AXIS_TRIGGERRIGHT,
+	};
+
+	for(auto axis : triggerAxis) {
+		mTriggerAxis[joyId].insert(SDL_GameControllerGetBindForAxis(gctrl, axis).value.axis);
+	}
+	LOG(LogInfo) << "Controller '" << SDL_GameControllerName(gctrl) << "' supports SDL2 game controller API. Number of trigger axis: " << mTriggerAxis[joyId].size();
+
+	SDL_GameControllerClose(gctrl);
+}
+
 void InputManager::addJoystickByDeviceIndex(int id)
 {
 	assert(id >= 0 && id < SDL_NumJoysticks());
-	
+
+	detectTriggerAxis(id);
+
 	// open joystick & add to our list
 	SDL_Joystick* joy = SDL_JoystickOpen(id);
 	assert(joy);
@@ -106,6 +149,8 @@ void InputManager::removeJoystickByJoystickID(SDL_JoystickID joyId)
 	delete it->second;
 	mInputConfigs.erase(it);
 
+	mTriggerAxis.erase(joyId);
+
 	// close the joystick
 	auto joyIt = mJoysticks.find(joyId);
 	if(joyIt != mJoysticks.end())
@@ -133,6 +178,8 @@ void InputManager::deinit()
 		delete iter->second;
 	}
 	mInputConfigs.clear();
+
+	mTriggerAxis.clear();
 
 	for(auto iter = mPrevAxisValues.begin(); iter != mPrevAxisValues.end(); iter++)
 	{
@@ -167,20 +214,35 @@ InputConfig* InputManager::getInputConfigByDevice(int device)
 		return mInputConfigs[device];
 }
 
+Sint16 InputManager::mapTriggerRange(const SDL_JoyAxisEvent& jaxis)
+{
+	// check if the event axis is a trigger axis (only possible if device supports gamedevice API)
+	if (mTriggerAxis[jaxis.which].find(jaxis.axis) == mTriggerAxis[jaxis.which].end())
+		return jaxis.value; // return vanilla value
+
+	// axis is a trigger. map half range manually
+	// this is a hack: usually this is done inside SDL gamedevice
+	// but since we are using legacy API we do this range conversion manually
+	return jaxis.value / 2 + 16384;
+}
+
 bool InputManager::parseEvent(const SDL_Event& ev, Window* window)
 {
 	bool causedEvent = false;
 	switch(ev.type)
 	{
 	case SDL_JOYAXISMOTION:
+	{
+		const Sint16 value = mapTriggerRange(ev.jaxis);
+
 		//if it switched boundaries
-		if((abs(ev.jaxis.value) > DEADZONE) != (abs(mPrevAxisValues[ev.jaxis.which][ev.jaxis.axis]) > DEADZONE))
+		if((abs(value) > DEADZONE) != (abs(mPrevAxisValues[ev.jaxis.which][ev.jaxis.axis]) > DEADZONE))
 		{
 			int normValue;
-			if(abs(ev.jaxis.value) <= DEADZONE)
+			if(abs(value) <= DEADZONE)
 				normValue = 0;
 			else
-				if(ev.jaxis.value > 0)
+				if(value > 0)
 					normValue = 1;
 				else
 					normValue = -1;
@@ -189,9 +251,9 @@ bool InputManager::parseEvent(const SDL_Event& ev, Window* window)
 			causedEvent = true;
 		}
 
-		mPrevAxisValues[ev.jaxis.which][ev.jaxis.axis] = ev.jaxis.value;
+		mPrevAxisValues[ev.jaxis.which][ev.jaxis.axis] = value;
 		return causedEvent;
-
+	}
 	case SDL_JOYBUTTONDOWN:
 	case SDL_JOYBUTTONUP:
 		window->input(getInputConfigByDevice(ev.jbutton.which), Input(ev.jbutton.which, TYPE_BUTTON, ev.jbutton.button, ev.jbutton.state == SDL_PRESSED, false));
@@ -400,6 +462,13 @@ std::string InputManager::getConfigPath()
 {
 	std::string path = getHomePath();
 	path += "/.emulationstation/es_input.cfg";
+	return path;
+}
+
+std::string InputManager::getGameControllerDbPath()
+{
+	std::string path = getHomePath();
+	path += "/.emulationstation/es_gamecontroller_db.cfg";
 	return path;
 }
 
