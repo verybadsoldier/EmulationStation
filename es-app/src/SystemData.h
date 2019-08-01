@@ -81,6 +81,7 @@ private:
 	void populateFolder(FileData* folder);
 	void indexAllGameFilters(const FileData* folder);
 	void setIsGameSystemStatus();
+	void writeMetaData();
 
 	FileFilterIndex* mFilterIndex;
 

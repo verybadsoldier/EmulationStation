@@ -31,6 +31,7 @@ private:
 
 	//Clear everything and load default values.
 	void setDefaults();
+	void backwardCompatible();
 
 	std::map<std::string, bool> mBoolMap;
 	std::map<std::string, int> mIntMap;
