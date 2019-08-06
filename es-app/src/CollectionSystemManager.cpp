@@ -522,6 +522,8 @@ bool CollectionSystemManager::toggleGameInCollection(FileData* file)
 			}
 			file->getSourceFileData()->getSystem()->getIndex()->addToIndex(file);
 			refreshCollectionSystems(file->getSourceFileData());
+
+			file->getSystem()->onMetaDataSavePoint();
 		}
 		if (adding)
 		{

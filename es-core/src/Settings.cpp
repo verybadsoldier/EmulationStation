@@ -228,12 +228,14 @@ void Settings::loadFile()
 		setFloat(node.attribute("name").as_string(), node.attribute("value").as_float());
 	for(pugi::xml_node node = doc.child("string"); node; node = node.next_sibling("string"))
 		setString(node.attribute("name").as_string(), node.attribute("value").as_string());
+
+	processBackwardCompatiblity();
 }
 
-void Settings::backwardCompatible()
+void Settings::processBackwardCompatiblity()
 {
 	{	// SaveGamelistsOnExit -> SaveGamelistsMode
-		std::map<std::string, bool>::const_iterator it = mBoolMap::mBoolMap.find("SaveGamelistsOnExit");
+		std::map<std::string, bool>::const_iterator it = mBoolMap.find("SaveGamelistsOnExit");
 		if (it != mBoolMap.end()) {
 			mStringMap["SaveGamelistsMode"] = it->second ? "on exit" : "never";
 			mBoolMap.erase(it);

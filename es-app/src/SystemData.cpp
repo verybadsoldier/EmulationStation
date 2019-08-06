@@ -19,7 +19,7 @@
 std::vector<SystemData*> SystemData::sSystemVector;
 
 SystemData::SystemData(const std::string& name, const std::string& fullName, SystemEnvironmentData* envData, const std::string& themeFolder, bool CollectionSystem) :
-	mName(name), mFullName(fullName), mEnvData(envData), mThemeFolder(themeFolder), mIsCollectionSystem(CollectionSystem), mIsGameSystem(true), mIsInitialized(false)
+	mName(name), mFullName(fullName), mEnvData(envData), mThemeFolder(themeFolder), mIsCollectionSystem(CollectionSystem), mIsGameSystem(true)
 {
 	mFilterIndex = new FileFilterIndex();
 
@@ -506,4 +506,11 @@ void SystemData::writeMetaData() {
 
 	//save changed game data back to xml
 	updateGamelist(this);
+}
+
+void SystemData::onMetaDataSavePoint() {
+	if(Settings::getInstance()->getString("SaveGamelistsMode") != "always")
+		return;
+
+	writeMetaData();
 }

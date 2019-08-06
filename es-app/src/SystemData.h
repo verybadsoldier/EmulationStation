@@ -68,6 +68,7 @@ public:
 	void loadTheme();
 
 	FileFilterIndex* getIndex() { return mFilterIndex; };
+	void onMetaDataSavePoint();
 
 private:
 	bool mIsCollectionSystem;
